@@ -7,6 +7,9 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
 
 # Load the dataset
 file_path = "dataset/kepler_data_subset.csv"
@@ -91,3 +94,69 @@ print(class_report)
 coefficients = pd.DataFrame(log_reg.coef_, columns=X.columns)
 print("\nLogistic Regression Coefficients:")
 print(coefficients)
+
+# -------------------------------- Feature Selection for Clustering --------------------------------
+# Use only numerical columns except 'koi_disposition_encoded'
+X_cluster = df[numerical_columns].drop(columns=['koi_disposition_encoded'], errors='ignore')
+
+# -------------------------------- Elbow Method to Find Optimal K --------------------------------
+# Calculate the inertia (within-cluster sum of squares) and silhouette scores
+inertia = []
+silhouette_scores = []
+k_values = range(2, 11)  # Checking clusters from 2 to 10
+
+for k in k_values:
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    kmeans.fit(X_cluster)
+    inertia.append(kmeans.inertia_)
+    silhouette_scores.append(silhouette_score(X_cluster, kmeans.labels_))
+
+# Plot the Elbow Method graph
+plt.figure(figsize=(10, 5))
+plt.plot(k_values, inertia, 'o-', label='Inertia')
+plt.xlabel("Number of Clusters (k)")
+plt.ylabel("Inertia")
+plt.title("Elbow Method for Optimal k")
+plt.legend()
+plt.show()
+
+# Plot Silhouette Scores
+plt.figure(figsize=(10, 5))
+plt.plot(k_values, silhouette_scores, 'o-', color='green', label='Silhouette Score')
+plt.xlabel("Number of Clusters (k)")
+plt.ylabel("Silhouette Score")
+plt.title("Silhouette Scores for Clusters")
+plt.legend()
+plt.show()
+
+# -------------------------------- K-Means Clustering --------------------------------
+# Choose the optimal k (e.g., 3) based on the elbow method
+optimal_k = 3
+kmeans = KMeans(n_clusters=optimal_k, random_state=42)
+df['Cluster'] = kmeans.fit_predict(X_cluster)
+
+print(f"Cluster Centers:\n{kmeans.cluster_centers_}")
+
+# -------------------------------- Visualize Clusters using PCA --------------------------------
+# Reduce data to 2 dimensions for visualization
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_cluster)
+
+# Add PCA components and cluster labels to the DataFrame
+df['PCA1'] = X_pca[:, 0]
+df['PCA2'] = X_pca[:, 1]
+
+# Scatter plot of clusters
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x='PCA1', y='PCA2', hue='Cluster', palette='Set1', data=df, s=100)
+plt.title("K-Means Clusters (PCA Reduced)")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.legend(title="Cluster")
+plt.show()
+
+# -------------------------------- Analyze Cluster Results --------------------------------
+print("\nCluster Analysis:")
+for cluster in range(optimal_k):
+    print(f"Cluster {cluster}:")
+    print(df[df['Cluster'] == cluster].describe())
